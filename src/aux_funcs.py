@@ -1,33 +1,30 @@
 """
 ----------------------------------ABOUT-----------------------------------
-Updated for TensorFlow 2.x (2026 compatible)
-Original Author: Arun Baskaran
----------------------------------------------------------------------------
+Author: Arun Baskaran
+--------------------------------------------------------------------------
 """
 
-import os
-import random
 import numpy as np
 import pandas as pd
-import cv2
-import matplotlib.pyplot as plt
-
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.keras import layers, regularizers
+import cv2
+import random
+import os
+import matplotlib.pyplot as plt
 
-from sklearn.model_selection import train_test_split
 from PIL import Image
-from skimage import exposure, morphology
-from skimage.filters import sobel
-from skimage.color import label2rgb
 from scipy import ndimage as ndi
+from skimage import exposure
+from skimage.color import label2rgb
+from skimage.filters import sobel
+from skimage.segmentation import watershed
+from skimage import morphology
 
 import model_params
+from model_params import *
 
-# ==============================
-# Helper Functions
-# ==============================
+# --------------------------------------------------------
 
 def smooth(img):
     return 0.5 * img + 0.5 * (
@@ -35,157 +32,305 @@ def smooth(img):
         np.roll(img, +1, axis=1) + np.roll(img, -1, axis=1)
     )
 
+# --------------------------------------------------------
 
 def returnIndex(a, value):
-    for i in range(len(a)):
+    k = np.size(a)
+    for i in range(k):
         if a[i] == value:
             return i
-    return None
 
-
-# ==============================
-# MODEL CREATION (Modernized)
-# ==============================
+# --------------------------------------------------------
 
 def create_model():
-    model = keras.Sequential([
-        layers.Input(shape=(model_params.width, model_params.height, 1)),
 
-        layers.Conv2D(
-            16, (5, 5),
+    xavier_init = tf.keras.initializers.GlorotUniform(seed=42)
+    zero_init = tf.zeros_initializer()
+
+    model = keras.models.Sequential([
+
+        keras.layers.Conv2D(
+            2,
+            (5,5),
+            strides=(1,1),
+            input_shape=(200,200,1),
+            kernel_initializer=xavier_init,
+            bias_initializer=zero_init,
+            kernel_regularizer=keras.regularizers.l1(0.001),
             padding='valid',
-            kernel_initializer="glorot_uniform",
-            kernel_regularizer=regularizers.l1(0.001),
-            activation='relu'
-        ),
-        layers.MaxPooling2D((2, 2)),
-
-        layers.Conv2D(
-            32, (5, 5),
-            kernel_initializer="glorot_uniform",
-            kernel_regularizer=regularizers.l1(0.001),
-            activation='relu'
-        ),
-        layers.MaxPooling2D((2, 2)),
-
-        layers.Conv2D(
-            64, (3, 3),
-            kernel_initializer="glorot_uniform",
-            kernel_regularizer=regularizers.l1(0.001),
-            activation='relu'
+            name='C1'
         ),
 
-        layers.Flatten(),
-        layers.Dense(64, activation='relu'),
-        layers.Dropout(0.3),
-        layers.Dense(3, activation='softmax')
+        keras.layers.MaxPool2D((2,2),(2,2),padding='valid',name='P1'),
+
+        keras.layers.Conv2D(
+            4,
+            (5,5),
+            strides=(1,1),
+            kernel_initializer=xavier_init,
+            bias_initializer=zero_init,
+            kernel_regularizer=keras.regularizers.l1(0.001),
+            name='C2'
+        ),
+
+        keras.layers.MaxPool2D((2,2),(2,2),padding='valid',name='P2'),
+
+        keras.layers.Conv2D(
+            12,
+            (3,3),
+            strides=(1,1),
+            kernel_initializer=xavier_init,
+            bias_initializer=zero_init,
+            kernel_regularizer=keras.regularizers.l1(0.001),
+            name='C3'
+        ),
+
+        keras.layers.Flatten(name='fc_layer'),
+
+        keras.layers.Dense(
+            3,
+            activation='softmax',
+            kernel_regularizer=keras.regularizers.l1(0.001)
+        )
     ])
 
     return model
 
-
-# ==============================
-# DATA LOADING (Improved)
-# ==============================
+# --------------------------------------------------------
 
 def load_images_labels():
 
-    df = pd.read_excel('labels.xlsx', header=None, names=['id', 'label'])
-    labels = df['label'].values - 1   # zero-based labels
+    df = pd.read_excel('labels.xlsx', header=None, names=['id','label'])
+    total_labels = df['label']
 
-    images = []
+    for i in range(len(total_labels)):
+        total_labels[i] -= 1
 
-    for i in range(1, model_params.total_size + 1):
-        filename = f'image_{i}.png'
-        image = cv2.imread(filename, cv2.IMREAD_GRAYSCALE)
+    train_list = random.sample(range(1,total_size+1),train_size)
 
-        image = cv2.resize(image,
-                           (model_params.width, model_params.height))
-        image = cv2.GaussianBlur(image, (5, 5), 0)
+    nontrainlist = []
+    test_list = []
 
-        # Safe normalization
-        image = image.astype("float32") / 255.0
+    for i in range(1,total_size+1):
+        if i not in train_list:
+            nontrainlist.append(i)
 
-        images.append(image)
+    validation_list = random.sample(nontrainlist,validation_size)
 
-    images = np.array(images)
-    images = np.expand_dims(images, axis=-1)
+    for item in nontrainlist:
+        if item not in validation_list:
+            test_list.append(item)
 
-    # Split dataset (modern way)
-    X_train, X_temp, y_train, y_temp = train_test_split(
-        images, labels,
-        train_size=model_params.train_size,
-        stratify=labels,
-        random_state=42
+    train_images=[]
+    train_labels=[]
+    validation_images=[]
+    validation_labels=[]
+    test_images=[]
+    test_labels=[]
+    global test_images_id
+    test_images_id=[]
+
+    for i in range(1,total_size+1):
+
+        if i <= 1000:
+          filename = 'Images1/image_' + str(i) + '.png'
+        else:
+          filename = 'Images2/image_' + str(i) + '.png'
+
+        # filename = 'Test_images/image_' + str(i) + '.png'
+        
+        image=cv2.imread(filename,cv2.IMREAD_GRAYSCALE)
+        image=cv2.resize(image,(width,height),interpolation=cv2.INTER_CUBIC)
+        image=cv2.blur(image,(5,5))
+        image=(image-np.min(image))/(np.max(image)-np.min(image))
+
+        if i in train_list:
+            train_images.append(image)
+            train_labels.append(total_labels[i-1])
+
+        elif i in validation_list:
+            validation_images.append(image)
+            validation_labels.append(total_labels[i-1])
+
+        else:
+            test_images.append(image)
+            test_labels.append(total_labels[i-1])
+            test_images_id.append(i)
+
+    train_images=np.reshape(train_images,(train_size,width,height,1))
+    validation_images=np.reshape(validation_images,(validation_size,width,height,1))
+    test_images=np.reshape(test_images,(test_size,width,height,1))
+
+    train_labels=tf.keras.utils.to_categorical(train_labels,3)
+    validation_labels=tf.keras.utils.to_categorical(validation_labels,3)
+    test_labels=tf.keras.utils.to_categorical(test_labels,3)
+
+    return train_images,train_labels,test_images,test_labels,validation_images,validation_labels
+
+# --------------------------------------------------------
+
+def train_model():
+
+    model=create_model()
+
+    checkpoint_path="weights/classification.ckpt"
+
+    es=tf.keras.callbacks.EarlyStopping(
+        monitor='val_loss',
+        patience=50,
+        restore_best_weights=True
     )
 
-    val_size_adjusted = model_params.validation_size / (
-        model_params.validation_size + model_params.test_size
+    cp_callback=tf.keras.callbacks.ModelCheckpoint(
+        filepath=checkpoint_path,
+        save_weights_only=True
     )
-
-    X_val, X_test, y_val, y_test = train_test_split(
-        X_temp, y_temp,
-        test_size=1 - val_size_adjusted,
-        stratify=y_temp,
-        random_state=42
-    )
-
-    # One-hot encode
-    y_train = keras.utils.to_categorical(y_train, 3)
-    y_val = keras.utils.to_categorical(y_val, 3)
-    y_test = keras.utils.to_categorical(y_test, 3)
-
-    return X_train, y_train, X_test, y_test, X_val, y_val
-
-
-# ==============================
-# TRAINING
-# ==============================
-
-def train_model(X_train, y_train, X_val, y_val):
-
-    model = create_model()
 
     model.compile(
-        optimizer=keras.optimizers.Adam(learning_rate=1e-4),
-        loss="categorical_crossentropy",
-        metrics=["accuracy"]
+        loss=tf.keras.losses.CategoricalCrossentropy(),
+        optimizer='Adam',
+        metrics=['accuracy']
     )
 
-    os.makedirs("weights", exist_ok=True)
-
-    callbacks = [
-        keras.callbacks.EarlyStopping(
-            monitor="val_loss",
-            patience=20,
-            restore_best_weights=True
-        ),
-        keras.callbacks.ModelCheckpoint(
-            "weights/classification.keras",
-            save_best_only=True
-        )
-    ]
-
-    history = model.fit(
-        X_train, y_train,
-        validation_data=(X_val, y_val),
-        epochs=100,
-        batch_size=32,
-        callbacks=callbacks
+    model.fit(
+        train_images,
+        train_labels,
+        epochs=50,
+        validation_data=(validation_images,validation_labels),
+        callbacks=[es,cp_callback]
     )
 
-    return model, history
+    return model
 
+# --------------------------------------------------------
 
-# ==============================
-# TESTING
-# ==============================
+def load_model():
 
-def test_accuracy(model, X_test, y_test):
-    loss, acc = model.evaluate(X_test, y_test)
-    print(f"Test Accuracy: {acc * 100:.2f}%")
+    model=create_model()
 
+    checkpoint_path="weights/classification.ckpt"
 
-def get_predicted_classes(model, X_test):
-    y_prob = model.predict(X_test)
-    return np.argmax(y_prob, axis=-1)
+    model.load_weights(checkpoint_path)
+    model.compile(
+        loss=tf.keras.losses.CategoricalCrossentropy(),
+        optimizer='Adam',
+        metrics=['accuracy']
+    )
+    return model
+
+# --------------------------------------------------------
+
+def test_accuracy(model, test_images, test_labels):
+
+    loss,acc=model.evaluate(test_images,test_labels,verbose=2)
+
+    print("Accuracy: {:5.2f}%".format(100*acc))
+
+# --------------------------------------------------------
+
+def get_predicted_classes(model, test_images):
+
+    y_prob=model.predict(test_images)
+
+    y_classes=y_prob.argmax(axis=-1)
+
+    return y_classes
+
+# --------------------------------------------------------
+
+def duplex_segmentation(i):
+
+    img_id = test_images_id[i]
+
+    if img_id <= 1000:
+      filename = 'Images1/image_' + str(img_id) + '.png'
+    else:
+      filename = 'Images2/image_' + str(img_id) + '.png'
+
+    image=Image.open(filename).convert('F')
+    image=np.copy(np.reshape(np.array(image),image.size[::-1])/255.)
+
+    image=exposure.equalize_adapthist(image,clip_limit=8.3)
+    image=smooth(smooth(image))
+
+    image_copy=image
+
+    image=cv2.resize(image,(200,200))
+    image_copy=cv2.resize(image_copy,(200,200))
+
+    markers=np.zeros_like(image)
+
+    markers[image>np.median(image)-0.10*np.std(image)]=1
+    markers[image<np.median(image)-0.10*np.std(image)]=2
+
+    elevation_map=sobel(image)
+
+    segmentation=watershed(elevation_map,markers)
+
+    segmentation=ndi.binary_fill_holes(segmentation-1)
+
+    labeled_grains,_=ndi.label(segmentation)
+
+    fig,ax1=plt.subplots()
+
+    ax1.imshow(image_copy,cmap='gray')
+    ax1.contour(segmentation,[0.5],linewidths=1.2,colors='r')
+    ax1.axis('off')
+
+    outfile='seg_duplex_'+str(test_images_id[i])+'.png'
+
+    plt.savefig(outfile,dpi=100)
+
+# --------------------------------------------------------
+
+def lamellar_segmentation(i):
+
+    img_id = test_images_id[i]
+
+    if img_id <= 1000:
+      filename = 'Images1/image_' + str(img_id) + '.png'
+    else:
+      filename = 'Images2/image_' + str(img_id) + '.png'
+    image=Image.open(filename).convert('F')
+    image=np.copy(np.reshape(np.array(image),image.size[::-1])/255.)
+
+    image=exposure.equalize_hist(image)
+    image=smooth(image)
+
+    gx=cv2.Sobel(np.float32(image),cv2.CV_32F,1,0,ksize=1)
+    gy=cv2.Sobel(np.float32(image),cv2.CV_32F,0,1,ksize=1)
+
+    mag,angle=cv2.cartToPolar(gx,gy,angleInDegrees=True)
+
+    mag_cut_off=0.2*np.max(mag)
+
+    markers=np.zeros_like(angle)
+
+    markers[(mag>mag_cut_off)]=1
+
+    markers=smooth(smooth(markers))
+
+    markers1=np.where(markers>np.mean(markers),1.0,0.0)
+
+    fig,ax1=plt.subplots()
+
+    ax1.imshow(image,'gray')
+    ax1.imshow(markers1,alpha=0.5)
+
+    outfile='seg_lamellae_'+str(test_images_id[i])+'.png'
+
+    plt.savefig(outfile,dpi=100)
+
+# --------------------------------------------------------
+
+def feature_segmentation(y_classes):
+
+    # global y_classes
+
+    for i in range(np.size(y_classes)):
+
+        if y_classes[i]==0:
+            duplex_segmentation(i)
+
+        elif y_classes[i]==1:
+            lamellar_segmentation(i)
