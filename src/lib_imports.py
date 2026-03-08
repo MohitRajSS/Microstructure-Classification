@@ -1,46 +1,33 @@
 """
 ----------------------------------ABOUT-----------------------------------
 Author: Arun Baskaran
-Modernized for TensorFlow 2.x (2026 compatible)
 --------------------------------------------------------------------------
 """
 
-# ========================
-# Core Libraries
-# ========================
-import os
-import random
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
-import cv2
-
 from PIL import Image
-
-# ========================
-# TensorFlow / Keras
-# ========================
+import cv2
+import pandas as pd
 import tensorflow as tf
 from tensorflow import keras
+import os.path
+import random
+
+
+# Keras (correct modern imports)
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import (
-    Dense,
-    Conv2D,
-    MaxPooling2D,
-    Reshape,
-    Flatten,
-    Dropout
-)
-from tensorflow.keras.optimizers import SGD, Adam
+from tensorflow.keras.layers import Reshape, Dense, Conv2D, MaxPool2D
+from tensorflow.keras.optimizers import SGD
 from tensorflow.keras import regularizers
 
-# ========================
-# Image Processing
-# ========================
+# Scientific libraries
 from scipy import ndimage as ndi
 
-from skimage import exposure, morphology
-from skimage.segmentation import watershed   # ✅ updated location
-from skimage.color import label2rgb
-from skimage.filters import sobel
+# Updated scikit-image imports
+from skimage.segmentation import watershed
+from skimage.morphology import disk
 from skimage.feature import peak_local_max, hog
+from skimage.filters import sobel
+from skimage import exposure, data, morphology
+from skimage.color import label2rgb
