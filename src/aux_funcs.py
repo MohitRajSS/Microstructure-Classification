@@ -23,6 +23,8 @@ from skimage import morphology
 
 import model_params
 from model_params import *
+import matplotlib
+matplotlib.rcParams['figure.max_open_warning'] = 0
 
 # --------------------------------------------------------
 
@@ -280,6 +282,7 @@ def duplex_segmentation(i):
     outfile='seg_duplex_'+str(test_images_id[i])+'.png'
 
     plt.savefig(outfile,dpi=100)
+    plt.close(fig)
 
 # --------------------------------------------------------
 
