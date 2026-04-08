@@ -166,7 +166,7 @@ def load_images_labels():
 
 # --------------------------------------------------------
 
-def train_model():
+def train_model(train_images, train_labels, validation_images,validation_labels):
 
     model=create_model()
 
