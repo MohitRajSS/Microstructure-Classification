@@ -31,7 +31,7 @@ if __name__ == "__main__":
     train_images, train_labels, test_images, test_labels, validation_images, validation_labels = load_images_labels()
    
     if mode == "training":
-        model = train_model()
+        model = train_model(train_images,train_labels, validation_images, validation_labels)
     elif mode == "load":
         model = load_model()
 
