@@ -47,9 +47,7 @@ def create_model():
     model = keras.models.Sequential([
 
         keras.layers.Conv2D(
-            2,
-            (5,5),
-            strides=(1,1),
+            2,(5,5),strides=(1,1),
             input_shape=(200,200,1),
             kernel_initializer=xavier_init,
             bias_initializer=zero_init,
@@ -61,9 +59,7 @@ def create_model():
         keras.layers.MaxPool2D((2,2),(2,2),padding='valid',name='P1'),
 
         keras.layers.Conv2D(
-            4,
-            (5,5),
-            strides=(1,1),
+            4,(5,5),strides=(1,1),
             kernel_initializer=xavier_init,
             bias_initializer=zero_init,
             kernel_regularizer=keras.regularizers.l1(0.001),
@@ -73,13 +69,21 @@ def create_model():
         keras.layers.MaxPool2D((2,2),(2,2),padding='valid',name='P2'),
 
         keras.layers.Conv2D(
-            12,
-            (3,3),
-            strides=(1,1),
+            12,(3,3),strides=(1,1),
             kernel_initializer=xavier_init,
             bias_initializer=zero_init,
             kernel_regularizer=keras.regularizers.l1(0.001),
             name='C3'
+        ),
+
+        # ✅ NEW LAYER (dimension-safe)
+        keras.layers.Conv2D(
+            12,(3,3),strides=(1,1),
+            padding='same',   # important
+            kernel_initializer=xavier_init,
+            bias_initializer=zero_init,
+            kernel_regularizer=keras.regularizers.l1(0.001),
+            name='C4'
         ),
 
         keras.layers.Flatten(name='fc_layer'),
@@ -170,7 +174,7 @@ def train_model(train_images, train_labels, validation_images,validation_labels)
 
     model=create_model()
 
-    checkpoint_path="weights/classification.ckpt"
+    checkpoint_path="weights/classification1.ckpt"
 
     es=tf.keras.callbacks.EarlyStopping(
         monitor='val_loss',
@@ -205,7 +209,7 @@ def load_model():
 
     model=create_model()
 
-    checkpoint_path="weights/classification.ckpt"
+    checkpoint_path="weights/classification1.ckpt"
 
     model.load_weights(checkpoint_path)
     model.compile(
